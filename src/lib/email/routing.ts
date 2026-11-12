@@ -51,11 +51,12 @@ export type ResolveInboundOptions = {
 /**
  * Resolves what should happen to an inbound message addressed to `toAddress`.
  *
- * Domain-scope rules are evaluated in three phases so that a broad catch-all can never
- * shadow a real mailbox:
+ * Domain-scope rules are evaluated in three phases so that a `store` catch-all
+ * can never shadow a real mailbox:
  *   1. `reject` rules (block lists) — highest precedence, evaluated before delivery.
- *   2. exact mailbox, then multi-domain mailbox aliases.
- *   3. remaining `forward` / `store` rules — the catch-all fallback.
+ *   2. exact mailbox / aliases — deliver there; matching domain `forward` rules
+ *      still run and keep a copy in that mailbox (so "forward everything" works).
+ *   3. remaining `forward` / `store` rules — only when no mailbox matched.
  * Within each phase rules run by descending priority, then oldest first.
  */
 export async function resolveInboundAddress(
@@ -90,7 +91,7 @@ export async function resolveInboundAddress(
 		};
 	}
 
-	// Phase 2 — a real mailbox always wins over a catch-all.
+	// Phase 2 — a real mailbox always wins for delivery; domain forwards still apply.
 	const exactMailboxes = await db
 		.select()
 		.from(mailboxes)
@@ -116,10 +117,22 @@ export async function resolveInboundAddress(
 				ruleId: forward.id,
 			};
 		}
+		const domainForward = findMatchingDomainForward(domainRules, matchInput);
+		if (domainForward) {
+			// Always keep the inbox copy when a real mailbox matched — a domain-wide
+			// forward must not divert mail away from existing addresses.
+			return {
+				action: "forward",
+				forwardTo: domainForward.forwardTo,
+				keepCopy: true,
+				mailbox: resolved,
+				ruleId: domainForward.id,
+			};
+		}
 		return { action: "store", mailbox: resolved };
 	}
 
-	// Phase 3 — catch-all and forwarding fallbacks.
+	// Phase 3 — catch-all and forwarding fallbacks (no mailbox matched).
 	for (const rule of domainRules) {
 		if (rule.action !== "forward" && rule.action !== "store") continue;
 		if (!matchesRule(rule, matchInput)) continue;
@@ -143,6 +156,20 @@ export async function resolveInboundAddress(
 		return { action: "store", mailbox: catchAll, ruleId: rule.id };
 	}
 
+	return null;
+}
+
+/** First matching domain-scope forward rule (priority order already on `domainRules`). */
+function findMatchingDomainForward(
+	domainRules: RuleRow[],
+	input: RuleMatchInput,
+): { id: string; forwardTo: string } | null {
+	for (const rule of domainRules) {
+		if (rule.action !== "forward") continue;
+		const forwardTo = rule.forwardTo?.trim();
+		if (!forwardTo || !matchesRule(rule, input)) continue;
+		return { id: rule.id, forwardTo };
+	}
 	return null;
 }
 

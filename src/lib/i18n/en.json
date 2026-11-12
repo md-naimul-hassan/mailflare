@@ -729,7 +729,7 @@
 	"routing.blockRules": "Block rules",
 	"routing.blockRulesDescription": "Evaluated before delivery. Matching mail is rejected at the edge.",
 	"routing.catchAll": "Catch-all and forwarding",
-	"routing.catchAllDescription": "Evaluated only when no mailbox on the domain matched the recipient.",
+	"routing.catchAllDescription": "Forward rules also run for real mailboxes (a copy stays in the inbox). Store catch-alls only apply when no mailbox matched.",
 	"routing.editRule": "Edit rule",
 	"routing.addRule": "Add routing rule",
 	"routing.dialogDescription": "Choose what happens to matching mail.",

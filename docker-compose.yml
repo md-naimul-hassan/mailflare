@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"   # web app and JMAP
-      - "25:25"       # inbound SMTP (point your domain's MX here)
+      - "2525:2525"   # inbound SMTP (local; use 25:25 in production)
     env_file: .env.docker
     volumes:
       - mailflare-data:/data
